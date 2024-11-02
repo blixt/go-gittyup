@@ -1,0 +1,7 @@
+Write elegant code but not too clever.
+Always consider performance, avoid unnecessary copies or loops.
+But don't optimize to the point of making the code harder to understand.
+For JavaScript specifically:
+- Always prefer for ... of instead of forEach.
+- The JavaScript in this codebase does not run through any bundler or compiler, it is pure ESM run in the browser with an import map for the bare module imports.
+- Use JSDoc to declare TypeScript types to keep the code as strongly typed as possible.
