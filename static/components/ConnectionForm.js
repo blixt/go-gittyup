@@ -21,8 +21,8 @@ const NAME_PATTERN = "[A-Za-z0-9\\s\\-_]+";
 const getQueryParams = () => {
     const params = new URLSearchParams(window.location.search);
     return {
-        repoURL: params.get("repo") || "github.com/blixt/chrome-ai-game",
-        name: params.get("name") || "Bob",
+        repoURL: params.get("repo") || "github.com/blixt/asteroids",
+        name: params.get("name") || "Avery",
     };
 };
 
