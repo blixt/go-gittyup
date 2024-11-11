@@ -135,15 +135,22 @@ export function useWebContainer(state, dispatch, iframeRef) {
             try {
                 // Start both tasks in parallel
                 dispatch(log("Loading files and booting WebContainer...", CONSOLE_COLORS.WEBCONTAINER));
+
+                const fsStartTime = performance.now();
                 const fsPromise = createFileSystem(repoHash, currentCommit, files).then((fs) => {
-                    dispatch(log("Files loaded successfully", CONSOLE_COLORS.WEBCONTAINER));
+                    const fsDuration = performance.now() - fsStartTime;
+                    dispatch(log(`Files loaded successfully (${fsDuration.toFixed(0)}ms)`, CONSOLE_COLORS.WEBCONTAINER));
                     return fs;
                 });
+
+                const bootStartTime = performance.now();
                 container = await WebContainer.boot();
                 container.on("output", async (data) => {
                     dispatch(log(data.toString(), CONSOLE_COLORS.WEBCONTAINER));
                 });
-                dispatch(log("WebContainer booted successfully", CONSOLE_COLORS.WEBCONTAINER));
+                const bootDuration = performance.now() - bootStartTime;
+                dispatch(log(`WebContainer booted successfully (${bootDuration.toFixed(0)}ms)`, CONSOLE_COLORS.WEBCONTAINER));
+
                 const fs = await fsPromise;
 
                 // Check if we've been cleaned up while waiting
@@ -151,16 +158,17 @@ export function useWebContainer(state, dispatch, iframeRef) {
                     return;
                 }
 
+                const mountStartTime = performance.now();
                 dispatch(log("Mounting files...", CONSOLE_COLORS.WEBCONTAINER));
                 await container.mount(fs);
-                dispatch(log("Files mounted successfully", CONSOLE_COLORS.WEBCONTAINER));
+                const mountDuration = performance.now() - mountStartTime;
+                dispatch(log(`Files mounted successfully (${mountDuration.toFixed(0)}ms)`, CONSOLE_COLORS.WEBCONTAINER));
 
                 // Check for package.json and install dependencies.
                 if (files.includes("package.json")) {
                     dispatch(log("Installing dependencies...", CONSOLE_COLORS.WEBCONTAINER));
                     const installProcess = await container.spawn("npm", ["install"]);
                     const installExit = await installProcess.exit;
-
                     if (installExit !== 0) {
                         throw new Error(`npm install failed with exit code ${installExit}`);
                     }
