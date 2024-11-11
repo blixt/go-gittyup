@@ -11,24 +11,27 @@ import (
 	"strings"
 	"time"
 
+	"github.com/blixt/go-llms/anthropic"
+	"github.com/blixt/go-llms/content"
+	"github.com/blixt/go-llms/llms"
+	"github.com/blixt/go-llms/tools"
 	"github.com/joho/godotenv"
-	"github.com/tmc/langchaingo/llms"
-	"github.com/tmc/langchaingo/llms/anthropic"
 
 	"github.com/blixt/go-hotel/hotel"
 )
 
-var llm llms.Model
+var llm *llms.LLM
 
 func init() {
 	err := godotenv.Load()
 	if err != nil {
 		log.Printf("Did not load env file: %v", err)
 	}
-	llm, err = anthropic.New(anthropic.WithModel("claude-3-5-sonnet-latest"))
-	if err != nil {
-		log.Fatalf("Failed to initialize LLM: %v", err)
-	}
+	llm = llms.New(
+		anthropic.New(os.Getenv("ANTHROPIC_API_KEY"), "claude-3-5-sonnet-latest"),
+		ReadFileTool,
+		SubmitSolutionTool,
+	)
 }
 
 type RoomMetadata struct {
@@ -47,7 +50,7 @@ func HashRoomID(roomID string) string {
 // Initialize room
 // Runs once when the room is loaded into memory
 
-func RoomInit(roomID string) (*RoomMetadata, error) {
+func RoomInit(ctx context.Context, roomID string) (*RoomMetadata, error) {
 	// Hash the room ID for directory naming.
 	hashedRoomID := HashRoomID(roomID)
 
@@ -93,26 +96,89 @@ func RoomInit(roomID string) (*RoomMetadata, error) {
 	return m, nil
 }
 
-func createDiffFromUserRequest(ctx context.Context, message string, room *hotel.Room[RoomMetadata, UserMetadata, Envelope]) {
+type ReadFileParams struct {
+	Path string `json:"path" description:"The path to the file to read"`
+}
+
+// Define tools
+var ReadFileTool = tools.Func(
+	"Read file",
+	"Read the contents of a file",
+	"read_file",
+	func(r tools.Runner, p ReadFileParams) tools.Result {
+		contents, err := os.ReadFile(filepath.Join(RepoBasePath, r.Context().Value("repoHash").(string), p.Path))
+		if err != nil {
+			return tools.Error(p.Path, fmt.Errorf("error reading file: %w", err))
+		}
+		return tools.Success(p.Path, map[string]any{"contents": string(contents)})
+	},
+)
+
+type FileUpdate struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+}
+
+type SubmitSolutionParams struct {
+	CommitMessage string       `json:"commit_message" description:"The commit message to use for the solution"`
+	FilesToUpdate []FileUpdate `json:"files_to_update" description:"A list of files to update"`
+}
+
+var SubmitSolutionTool = tools.Func(
+	"Submit solution",
+	"Submit the solution to the user's request",
+	"submit_solution",
+	func(r tools.Runner, p SubmitSolutionParams) tools.Result {
+		// Implementation remains the same, just return a tools.Result
+		return tools.Success("Solution submitted", map[string]any{
+			"commit_message": p.CommitMessage,
+			"files":          p.FilesToUpdate,
+		})
+	},
+)
+
+func createDiffFromUserRequest(ctx context.Context, room *hotel.Room[RoomMetadata, UserMetadata, Envelope], currentPath, message string) {
 	requestId := fmt.Sprintf("r%d", time.Now().UnixNano())
-	room.Broadcast(ServerUser.Envelop(LLMDeltaMessage{
-		ID:      requestId,
-		Content: "",
-	}))
-	_, err := llm.GenerateContent(ctx,
-		[]llms.MessageContent{
-			llms.TextParts(llms.ChatMessageTypeHuman, message),
-		},
-		llms.WithStreamingFunc(func(ctx context.Context, chunk []byte) error {
+
+	// Prepare system prompt
+	files := strings.Join(room.Metadata().Files, "\n")
+	currentPathContent, err := os.ReadFile(filepath.Join(RepoBasePath, room.Metadata().RepoHash, currentPath))
+	if err != nil {
+		log.Printf("Error reading %q: %v", currentPath, err)
+		return
+	}
+
+	llm.SystemPrompt = func() content.Content {
+		return content.Textf(
+			"Succinctly solve the user's request. Feel free to think through the problem out loud, and read files if necessary. "+
+				"However, once you submit your solution, you will not be able to do more so remember you just have one shot. "+
+				"Here are all files in the repo:\n\n%s\n\nThe user is currently looking at: %s\n\nContent of %q:\n\n%s",
+			files, currentPath, currentPath, currentPathContent,
+		)
+	}
+
+	// Create a context with the repo hash
+	ctxWithRepo := context.WithValue(ctx, "repoHash", room.Metadata().RepoHash)
+
+	// Process chat updates
+	for update := range llm.ChatWithContext(ctxWithRepo, message) {
+		switch update := update.(type) {
+		case llms.ErrorUpdate:
+			log.Printf("Error from LLM: %v", update.Error)
+			return
+		case llms.TextUpdate:
 			room.Broadcast(ServerUser.Envelop(LLMDeltaMessage{
 				ID:      requestId,
-				Content: string(chunk),
+				Content: update.Text,
 			}))
-			return nil
-		}))
-	if err != nil {
-		log.Printf("Error generating content: %v", err)
-		return
+		case llms.ToolStartUpdate:
+			log.Printf("Starting tool: %s", update.Tool.Label())
+		case llms.ToolDoneUpdate:
+			log.Printf("Tool finished: %s", update.Result.Label())
+			if err := update.Result.Error(); err != nil {
+				log.Printf("Tool error: %v", err)
+			}
+		}
 	}
 }
 
@@ -163,7 +229,8 @@ func RoomHandler(ctx context.Context, room *hotel.Room[RoomMetadata, UserMetadat
 					room.BroadcastExcept(event.Client, event.Data)
 					const aiMentionPrefix = "@ai "
 					if strings.HasPrefix(msg.Content, aiMentionPrefix) {
-						go createDiffFromUserRequest(ctx, msg.Content[len(aiMentionPrefix):], room)
+						currentPath := clientMetadata.ActiveFile
+						go createDiffFromUserRequest(ctx, room, currentPath, msg.Content[len(aiMentionPrefix):])
 					}
 				case *UpdateMetadataMessage:
 					if msg.ActiveFile != nil {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"os/exec"
@@ -11,7 +12,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync/atomic"
-	"mime"
 
 	"github.com/blixt/go-hotel/hotel"
 	"github.com/gorilla/websocket"
@@ -33,7 +33,7 @@ var nextUserID atomic.Int32
 
 func init() {
 	// Make sure next user id starts at 1.
-	nextUserID.Add(1)
+	nextUserID.Store(1)
 	// Register message types that are sent between server and client.
 	messageRegistry.Register(
 		&lib.ChatMessage{},
