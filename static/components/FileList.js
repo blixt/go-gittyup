@@ -532,7 +532,6 @@ function FileTreeItem({ name, item, level = 0, selectedFile, onFileSelect, openF
  * @returns {React.ReactElement}
  */
 export function FileList({ files, selectedFile, onFileSelect, usersInFiles }) {
-    console.log(usersInFiles);
     const [openFolders, setOpenFolders] = useState(new Set());
     const fileTree = useMemo(() => buildFileTree(files), [files]);
 

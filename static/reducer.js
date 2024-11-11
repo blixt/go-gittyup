@@ -296,7 +296,6 @@ export function reducer(state, action) {
                     return;
                 }
                 draft.users[action.user.id] = action.user;
-                console.log("set", action.user, "to", draft.users);
                 draft.logs.push(
                     log(`${action.user.name} (id: ${action.user.id}) joined the room`, getUserColor(action.user.id, draft.user?.id || null)),
                 );
@@ -325,7 +324,6 @@ export function reducer(state, action) {
                 break;
             }
         }
-        console.log(draft.users);
         // Update usersInFiles object based on current users and their active files
         draft.usersInFiles = {};
         for (const userIdString in draft.users) {
