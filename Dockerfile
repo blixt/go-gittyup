@@ -4,14 +4,14 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o gittyup ./examples/gittyup
+RUN CGO_ENABLED=0 GOOS=linux go build -o gittyup
 
 FROM alpine:latest
 RUN apk add --no-cache git
 RUN adduser -D -g '' appuser
-RUN mkdir /app /app/static /app/repos
+RUN mkdir /app /app/repos /app/static
 COPY --from=builder /app/gittyup /app/
-COPY examples/gittyup/static /app/static
+COPY static /app/static
 RUN chown -R appuser:appuser /app
 USER appuser
 WORKDIR /app

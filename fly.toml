@@ -2,7 +2,6 @@ app = "gittyup"
 primary_region = "mad"
 
 [build]
-dockerfile = "examples/gittyup/Dockerfile"
 
 [http_service]
 internal_port = 8080
