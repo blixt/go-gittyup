@@ -1,17 +1,24 @@
 import htm from "htm";
+import { Columns2, Monitor, Rows2, SquareCode } from "lucide-react";
 import React, { useReducer, useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { ConnectionForm } from "./components/ConnectionForm.js";
 import { Console } from "./components/Console.js";
 import { FileList } from "./components/FileList.js";
 import { Loading } from "./components/Loading.js";
+import { ViewportButton } from "./components/ViewportControls.js";
 import { useFileContent } from "./hooks.js";
 import { useWebContainer } from "./hooks.js";
 import { parseWebSocketMessage } from "./messages.js";
 import { CodeEditor, useSetupMonaco } from "./monaco.js";
 import { CONSOLE_COLORS, initialState, log, reducer } from "./reducer.js";
 
+/** @typedef {import("./components/ViewportControls.js").ViewportMode} ViewportMode */
+
 const html = htm.bind(React.createElement);
+
+/** @type {import("./components/ViewportControls.js").ViewportMode} */
+const defaultViewportMode = "horizontal";
 
 function App() {
     useSetupMonaco();
@@ -19,6 +26,7 @@ function App() {
     const logsRef = useRef(null);
     const [chatInput, setChatInput] = useState("");
     const iframeRef = useRef(null);
+    const [layoutMode, setLayoutMode] = useState(defaultViewportMode);
 
     useWebContainer(state, dispatch, iframeRef);
 
@@ -113,26 +121,76 @@ function App() {
                     </div>
                 </div>
 
-                <div className="flex flex-1 min-h-0">
-                    <div className="w-1/2 min-h-0">
-                        ${
-                            currentFile.isLoading
-                                ? html`<div className="flex items-center justify-center h-full text-slate-800 dark:text-slate-200">
-                                      <${Loading} />
-                                  </div>`
-                                : html`<${CodeEditor}
-                                      path=${currentFile.path}
-                                      value=${currentFile.content}
-                                      readOnly
-                                      markers=${[]}
-                                  />`
-                        }
-                    </div>
-                    <div className="w-1/2 min-h-0 border-l border-slate-300 dark:border-slate-700">
-                        <iframe
-                            ref=${iframeRef}
-                            className="w-full h-full"
+                <div className="flex flex-col flex-1 min-h-0">
+                    <div className="flex gap-2 p-2 border-b border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 justify-center">
+                        <${ViewportButton}
+                            mode="horizontal"
+                            isActive=${layoutMode === "horizontal"}
+                            icon=${Columns2}
+                            title="Split horizontally (50/50)"
+                            onClick=${setLayoutMode}
                         />
+                        <${ViewportButton}
+                            mode="vertical"
+                            isActive=${layoutMode === "vertical"}
+                            icon=${Rows2}
+                            title="Split vertically (50/50)"
+                            onClick=${setLayoutMode}
+                        />
+                        <${ViewportButton}
+                            mode="code"
+                            isActive=${layoutMode === "code"}
+                            icon=${SquareCode}
+                            title="Show code only"
+                            onClick=${setLayoutMode}
+                        />
+                        <${ViewportButton}
+                            mode="preview"
+                            isActive=${layoutMode === "preview"}
+                            icon=${Monitor}
+                            title="Show preview only"
+                            onClick=${setLayoutMode}
+                        />
+                    </div>
+
+                    <div className=${`flex min-h-0 ${layoutMode === "vertical" ? "flex-col" : "flex-row"} h-full`}>
+                        <div className=${`${
+                            layoutMode === "preview"
+                                ? "hidden"
+                                : layoutMode === "code"
+                                  ? "w-full h-full"
+                                  : layoutMode === "vertical"
+                                    ? "h-1/2"
+                                    : "w-1/2"
+                        }`}>
+                            ${
+                                currentFile.isLoading
+                                    ? html`<div className="flex items-center justify-center h-full text-slate-800 dark:text-slate-200">
+                                          <${Loading} />
+                                      </div>`
+                                    : html`<${CodeEditor}
+                                          path=${currentFile.path}
+                                          value=${currentFile.content}
+                                          readOnly
+                                          markers=${[]}
+                                      />`
+                            }
+                        </div>
+
+                        <div className=${`${
+                            layoutMode === "code"
+                                ? "hidden"
+                                : layoutMode === "preview"
+                                  ? "w-full h-full"
+                                  : layoutMode === "vertical"
+                                    ? "h-1/2"
+                                    : "w-1/2"
+                        }`}>
+                            <iframe
+                                ref=${iframeRef}
+                                className="w-full h-full"
+                            />
+                        </div>
                     </div>
                 </div>
             </div>
