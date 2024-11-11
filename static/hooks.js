@@ -165,22 +165,56 @@ export function useWebContainer(state, dispatch, iframeRef) {
                 dispatch(log(`Files mounted successfully (${mountDuration.toFixed(0)}ms)`, CONSOLE_COLORS.WEBCONTAINER));
 
                 // Check for package.json and install dependencies.
-                if (files.includes("package.json")) {
-                    dispatch(log("Installing dependencies...", CONSOLE_COLORS.WEBCONTAINER));
-                    const installProcess = await container.spawn("npm", ["install"]);
+                if (fs["package.json"] && "file" in fs["package.json"]) {
+                    const packageJson = JSON.parse(fs["package.json"].file.contents);
+                    const packageManager = packageJson.packageManager;
+
+                    let cmd = "npm";
+                    /** @type {string[]} */
+                    let installArgs = ["install"];
+                    if (packageManager) {
+                        if (packageManager.startsWith("yarn")) {
+                            cmd = "yarn";
+                            installArgs = [];
+                        } else if (packageManager.startsWith("pnpm")) {
+                            cmd = "pnpm";
+                            installArgs = ["install"];
+                        } else if (packageManager.startsWith("bun")) {
+                            cmd = "bun";
+                            installArgs = ["install"];
+                        }
+                    }
+
+                    dispatch(log(`Installing dependencies using ${cmd}...`, CONSOLE_COLORS.WEBCONTAINER));
+                    const installProcess = await container.spawn(cmd, installArgs);
+                    installProcess.output.pipeTo(
+                        new WritableStream({
+                            write(data) {
+                                dispatch(logFromAnsi(data.toString()));
+                            },
+                        }),
+                    );
                     const installExit = await installProcess.exit;
                     if (installExit !== 0) {
-                        throw new Error(`npm install failed with exit code ${installExit}`);
+                        throw new Error(`${cmd} install failed with exit code ${installExit}`);
                     }
                     dispatch(log("Dependencies installed successfully", CONSOLE_COLORS.WEBCONTAINER));
-                }
 
-                // Check for Vite config.
-                if (files.includes("vite.config.js") || files.includes("vite.config.ts")) {
-                    dispatch(log("Starting Vite dev server...", CONSOLE_COLORS.WEBCONTAINER));
-                    const startProcess = await container.spawn("npm", ["run", "dev"]);
+                    // Try to start a dev server using available scripts
+                    const scripts = packageJson.scripts || {};
+                    /** @type {string[]} */
+                    let startArgs = [];
+                    if (scripts.dev) {
+                        startArgs = ["run", "dev"];
+                    } else if (scripts.start) {
+                        startArgs = ["run", "start"];
+                    } else {
+                        dispatch(log("No start script found", CONSOLE_COLORS.WEBCONTAINER));
+                        return;
+                    }
 
-                    // Wait for the server to start
+                    dispatch(log(`Starting development server with ${cmd} ${startArgs.join(" ")}...`, CONSOLE_COLORS.WEBCONTAINER));
+                    const startProcess = await container.spawn(cmd, startArgs);
                     startProcess.output.pipeTo(
                         new WritableStream({
                             write(data) {
