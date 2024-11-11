@@ -56,9 +56,10 @@ const ANSI_TO_TAILWIND = {
  * Pattern to match ANSI escape sequences:
  * - Color/style codes: \u001b\[([0-9;]*)m
  * - Cursor movement codes: \u001b\[\d*(?:;\d+)*[HJA-Za-z]
+ * - Common private codes: \u001b\[\?\d+[h|l]
  */
 // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI codes
-const ANSI_PATTERN = /\u001b\[(?:[0-9;]*)m|\u001b\[\d*(?:;\d+)*[HJA-Za-z]/g;
+const ANSI_PATTERN = /\u001b\[(?:[0-9;]*)m|\u001b\[\d*(?:;\d+)*[HJA-Za-z]|\u001b\[\?\d+[h|l]/g;
 
 /**
  * Pattern to match URLs
