@@ -22,6 +22,8 @@ import (
 
 var llm *llms.LLM
 
+type repoHashKey struct{}
+
 func init() {
 	err := godotenv.Load()
 	if err != nil {
@@ -106,7 +108,11 @@ var ReadFileTool = tools.Func(
 	"Read the contents of a file",
 	"read_file",
 	func(r tools.Runner, p ReadFileParams) tools.Result {
-		contents, err := os.ReadFile(filepath.Join(RepoBasePath, r.Context().Value("repoHash").(string), p.Path))
+		repoHash, ok := r.Context().Value(repoHashKey{}).(string)
+		if !ok {
+			return tools.Error(p.Path, fmt.Errorf("repository hash not found in context"))
+		}
+		contents, err := os.ReadFile(filepath.Join(RepoBasePath, repoHash, p.Path))
 		if err != nil {
 			return tools.Error(p.Path, fmt.Errorf("error reading file: %w", err))
 		}
@@ -158,7 +164,7 @@ func createDiffFromUserRequest(ctx context.Context, room *hotel.Room[RoomMetadat
 	}
 
 	// Create a context with the repo hash
-	ctxWithRepo := context.WithValue(ctx, "repoHash", room.Metadata().RepoHash)
+	ctxWithRepo := context.WithValue(ctx, repoHashKey{}, room.Metadata().RepoHash)
 
 	// Process chat updates
 	for update := range llm.ChatWithContext(ctxWithRepo, message) {
