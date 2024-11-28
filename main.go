@@ -74,7 +74,7 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 	// Get or create the room
 	room, err := roomManager.GetOrCreateRoom(roomID)
 	if err != nil {
-		log.Printf("Room creation error: %v, RoomID: %s", err, roomID)
+		log.Printf("Room creation error: %v, RoomID: %q", err, roomID)
 		conn.Close()
 		return
 	}
@@ -83,7 +83,7 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 	id := int(nextUserID.Add(1))
 	client, err := room.NewClient(&lib.UserMetadata{ID: id, Name: name})
 	if err != nil {
-		log.Printf("Client creation error: %v, Name: %s", err, name)
+		log.Printf("Client creation error: %v, Name: %q", err, name)
 		conn.Close()
 		return
 	}
@@ -93,7 +93,7 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			room.RemoveClient(client)
 			conn.Close()
-			log.Printf("Client %s disconnected", name)
+			log.Printf("Client %q disconnected", name)
 		}()
 
 		for {
@@ -104,7 +104,7 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 				// Read the raw message
 				_, rawMsg, err := conn.ReadMessage()
 				if err != nil {
-					log.Printf("Read error: %v, Name: %s", err, name)
+					log.Printf("Read error: %v, Name: %q", err, name)
 					return
 				}
 
@@ -131,7 +131,7 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 					continue
 				}
 
-				log.Printf("Received message from %s: %#v", name, msg)
+				log.Printf("[%s] <- [%s] %#v", roomID, name, msg)
 				room.HandleClientData(client, client.Metadata().Envelop(msg))
 			}
 		}
@@ -153,10 +153,10 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 
 			err = conn.WriteMessage(websocket.TextMessage, []byte(outMsg))
 			if err != nil {
-				log.Printf("Write error: %v, Name: %s", err, name)
+				log.Printf("Write error: %v, Name: %q", err, name)
 				return
 			}
-			log.Printf("Sent message to %s: %s", name, outMsg)
+			log.Printf("[%s] -> [%s] %s", roomID, name, outMsg)
 		}
 	}()
 }

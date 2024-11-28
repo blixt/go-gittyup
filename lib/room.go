@@ -231,7 +231,6 @@ func RoomHandler(ctx context.Context, room *hotel.Room[RoomMetadata, UserMetadat
 				// Incoming message from a client.
 				switch msg := event.Data.Message.(type) {
 				case *ChatMessage:
-					log.Printf("<%s> in %s: %s", clientMetadata.Name, room.ID(), msg.Content)
 					room.BroadcastExcept(event.Client, event.Data)
 					const aiMentionPrefix = "@ai "
 					if strings.HasPrefix(msg.Content, aiMentionPrefix) {
